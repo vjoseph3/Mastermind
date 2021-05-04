@@ -1,13 +1,16 @@
-;; The first three lines of this file were inserted by DrRacket. They record metadata
-;; about the language level of this file in a form that our tools can easily process.
-#reader(lib "htdp-advanced-reader.ss" "lang")((modname mastermind-3) (read-case-sensitive #t) (teachpacks ()) (htdp-settings #(#t constructor repeating-decimal #t #t none #f () #f)))
 ;; -------------------------------------------------------------------
 ;;    Joseph Vendryes
-;;    December 2020
-;;    Mastermind
+;;    May 2021
+;;    Mastermind v2 Model
 ;; -------------------------------------------------------------------
 
-(require htdp/gui)
+#lang racket
+
+(provide (prefix-out mastermind- (combine-out play
+                                              first-play
+                                              game-over?
+                                              impossible?
+                                              (struct-out board))))
 
 
 ;; -------------------------------------------------------------------
@@ -133,154 +136,68 @@
 
 ;; A GuessIndex is (Anyof Index void-symbol)
 
-;; A Guess is a non-empty (listof (listof GuessIndex))
+;; A Guess is one of
+;; * a non-empty (listof (listof GuessIndex))
+;; * 'impossible
 
 ;; A GuessMouth is a (listof GuessIndex)
 
+(define-struct board
+  (guess history reds whites code-length pool-size))
+;; A Board is a
+;;    (make-board Guess History (listof Index) (listof Index) Nat Nat)
+;; Requires: history, reds, and whites are all the same length
+
 
 ;; -------------------------------------------------------------------
-;; Constants and Messages
+;; Constants
 
 (define void-symbol 'N)
-
-(define bad-marking-message
-  "Error: no solution found")
-
-
-;; ---------------
-;; (progress-message n) produces a message indicating this is the n-th
-;;    attempt.
-;; Examples:
-(check-expect (progress-message 1) "Attempt 1:")
-(check-expect (progress-message 10) "Attempt 10:")
-
-;; progress-message: Nat -> Str
-(define (progress-message n)
-  (string-append "Attempt "
-                 (number->string n)
-                 ":"))
-
-
-;; ---------------
-;; (summary-message history) produces a summary message from history.
-;; Examples:
-(check-expect (summary-message '(((0 1 2 3))))
-              "Used 1 try\n")
-(check-expect (summary-message '(((1 2 3) (0)) ((0 1 2 3))))
-              "Used 2 tries\n")
-
-;; summary-message: History -> Str
-(define (summary-message history)
-  (string-append "Used "
-                 (number->string (length history))
-                 (if (= 1 (length history))
-                     " try"
-                     " tries")
-                 "\n"))
 
 
 ;; -------------------------------------------------------------------
 ;; Main Function
 
-;; (mind code-length pool-size) guesses at the user's secret code,
-;;    which is of length code-length and contains colours less than
-;;    pool-size.
+(define (first-play code-length pool-size)
+  (define guess   (list (build-list code-length (lambda (n) n))))
+  (define history empty)
+  (define reds    empty)
+  (define whites  empty)
+  
+  (make-board guess history reds whites code-length pool-size))
 
-;; mind: Nat Nat -> Window
-;; Requires:
-;;    code-length > 0
-;;    pool-size > 0
-(define (mind code-length pool-size)
-  (local [(define mark-message "Enter mark")
+(define (play board new-red new-white)
+  (define guess       (board-guess       board))
+  (define history     (board-history     board))
+  (define reds        (board-reds        board))
+  (define whites      (board-whites      board))
+  (define code-length (board-code-length board))
+  (define pool-size   (board-pool-size   board))
 
-          ;; (refresh guess history r w window) hides window and
-          ;;    creates a new window with a new guess based on guess,
-          ;;    past attempts history, red marks r, and white marks w.
-          ;; refresh: Guess History (listof Nat) (listof Nat)
-          ;;           -> Window
-          (define (refresh guess history r w window)
-            (if (= (first r) code-length)
-                (local [(define ignore
-                          (display (summary-message history)))]
+  (define new-history (cons (simplify guess) history))
+  (define new-reds    (cons new-red reds))
+  (define new-whites  (cons new-white whites))
+  (define new-guess   (complete (generate guess new-history
+                                          new-reds new-whites
+                                          code-length)
+                                code-length))
 
-                  (hide-window window))
-                (local [(define arrangement
-                          (generate guess history r w code-length))
-                        (define new-guess
-                          (complete arrangement code-length))
-                        (define new-history
-                          (cons (simplify new-guess) history))
+  (make-board new-guess new-history new-reds new-whites
+              code-length pool-size))
 
-                        (define r-choice
-                          (make-choice
-                           (map number->string
-                                (build-list (add1 code-length)
-                                            (lambda (n) n)))))
-                        (define w-choice
-                          (make-choice
-                           (map number->string
-                                (build-list (add1 code-length)
-                                            (lambda (n) n)))))]
+(define (game-over? board)
+  (= (first (board-reds board))
+     (board-code-length board)))
 
-                  (if (and (> (length new-guess) pool-size)
-                           (not (empty? (first new-guess))))
-                      (error bad-marking-message)
-                      (local [(define new-window
-                                (create-window
-                                 (list
-                                  (list (make-message
-                                         (progress-message
-                                          (length new-history))))
-                                  (list (make-message
-                                         (stringify-attempt
-                                          (first new-history))))
-                                  (list r-choice w-choice)
-                                  (list (make-button
-                                         mark-message
-                                         (lambda (ignore)
-                                           (refresh
-                                            new-guess
-                                            new-history
-                                            (cons (choice-index
-                                                   r-choice) r)
-                                            (cons (choice-index
-                                                   w-choice) w)
-                                            new-window)))))))]
+(define (impossible? board)
+  (or (and (symbol? (board-guess board))
+           (symbol=? (board-guess board) 'impossible))
+      (colours-exhausted? board)))
 
-                        (hide-window window))))))
-
-          (define guess (list (build-list code-length
-                                          (lambda (n) n))))
-          (define history (list guess))
-
-          (define r-choice
-            (make-choice
-             (map number->string
-                  (build-list (add1 code-length)
-                              (lambda (n) n)))))
-          (define w-choice
-            (make-choice
-             (map number->string
-                  (build-list (add1 code-length)
-                              (lambda (n) n)))))
-
-          (define window
-            (create-window
-             (list
-              (list (make-message
-                     (progress-message (length history))))
-              (list (make-message (stringify-attempt guess)))
-              (list r-choice w-choice)
-              (list (make-button
-                     mark-message
-                     (lambda (ignore)
-                       (refresh guess
-                                history
-                                (list (choice-index r-choice))
-                                (list (choice-index w-choice))
-                                window)))))))]
-
-    window))
+(define (colours-exhausted? board)
+  (and (> (length (board-guess board))
+          (board-pool-size board))
+       (not (empty? (first (board-guess board))))))
 
 
 ;; -------------------------------------------------------------------
@@ -291,50 +208,53 @@
 ;;    arrangement distributing r and w through history, cycling from a
 ;;    numerical correction of guess, for codes of length code-length.
 ;; Examples:
-(check-expect (generate '((0)) '(((0))) '(0) '(0) 1) '((N)))
-(check-expect (generate '((0) (N)) '(((0) ()) ((0))) '(0 0) '(0 0) 1)
-              '((N) (N)))
-(check-expect (generate '((0 1 2)) '(((0 1 2))) '(2) '(0) 3)
-              '((0 1 N)))
-(check-expect
- (generate '((1 2) (0 N N)) '(((1 2) (0)) ((0 1 2))) '(1 1) '(1 0) 3)
- '((N 2) (N 1 N)))
-(check-expect
- (generate '((1 2) (0 N N)) '(((1 2) (0)) ((0 1 2))) '(0 1) '(1 0) 3)
- '((N N) (N 1 N)))
+;(check-expect (generate '((0)) '(((0))) '(0) '(0) 1) '((N)))
+;(check-expect (generate '((0) (N)) '(((0) ()) ((0))) '(0 0) '(0 0) 1)
+;              '((N) (N)))
+;(check-expect (generate '((0 1 2)) '(((0 1 2))) '(2) '(0) 3)
+;              '((0 1 N)))
+;(check-expect
+; (generate '((1 2) (0 N N)) '(((1 2) (0)) ((0 1 2))) '(1 1) '(1 0) 3)
+; '((N 2) (N 1 N)))
+;(check-expect
+; (generate '((1 2) (0 N N)) '(((1 2) (0)) ((0 1 2))) '(0 1) '(1 0) 3)
+; '((N N) (N 1 N)))
 
 ;; generate: Guess History (listof Nat) (listof Nat) Nat -> Guess
 ;; Requires:
 ;;    guess is the same length as the first of history
+;;      or guess is 'impossible
 ;;    r and w are the same length as history
 (define (generate guess history r w code-length)
-  (local [(define current (first history))
+  (cond [(and (symbol? guess) (symbol=? guess 'impossible))
+         'impossible]
+        [else
+         (define current (first history))
 
-          (define count-r (count true (rest guess) (rest current)))
-          (define count-w (count false (rest guess) (rest current)))
+         (define count-r (count true (rest guess) (rest current)))
+         (define count-w (count false (rest guess) (rest current)))
 
-          (define excess-r (- (first r) count-r))
-          (define excess-w (- (first w) count-w))]
+         (define excess-r (- (first r) count-r))
+         (define excess-w (- (first w) count-w))
 
-    (if (and (>= excess-r 0)
-             (>= excess-w 0))
-        (rectify (fill excess-r
-                       excess-w
-                       (cons (first (first history))
-                             (rest guess))
-                       code-length)
-                 history r w code-length)
-        (generate (complete (rectify (cycle (rest guess)
-                                            (rest history)
-                                            (rest r)
-                                            (rest w)
-                                            code-length)
-                                     (rest history)
-                                     (rest r)
-                                     (rest w)
-                                     code-length)
+         (if (and (>= excess-r 0)
+                  (>= excess-w 0))
+             (rectify (fill excess-r
+                            excess-w
+                            (cons (first current) (rest guess))
                             code-length)
-                  history r w code-length))))
+                      history r w code-length)
+             (generate (complete (rectify (cycle (rest guess)
+                                                 (rest history)
+                                                 (rest r)
+                                                 (rest w)
+                                                 code-length)
+                                          (rest history)
+                                          (rest r)
+                                          (rest w)
+                                          code-length)
+                                 code-length)
+                       history r w code-length))]))
 
 
 ;; ---------------
@@ -342,16 +262,27 @@
 ;;    a list of all indices less than code-length that are not
 ;;    already in guess.
 ;; Examples:
-(check-expect (complete '((0 N N N)) 4) '((1 2 3) (0 N N N)))
-(check-expect (complete '((N 2 N) (N 1 N N)) 4)
-              '((0 3) (N 2 N) (N 1 N N)))
+;(check-expect (complete '((0 N N N)) 4) '((1 2 3) (0 N N N)))
+;(check-expect (complete '((N 2 N) (N 1 N N)) 4)
+;              '((0 3) (N 2 N) (N 1 N N)))
 
 ;; complete: Guess Nat -> Guess
 (define (complete rguess code-length)
-  (cons (filter (lambda (n)
-                  (not (member? n (foldr append '() rguess))))
-                (build-list code-length (lambda (n) n)))
-        rguess))
+  (if (and (symbol? rguess) (symbol=? rguess 'impossible))
+      'impossible
+      (cons (filter (lambda (n)
+                      (not (member? n (foldr append '() rguess))))
+                    (build-list code-length (lambda (n) n)))
+            rguess)))
+
+
+;; ---------------
+;; (member? item lst) produces true if lst contains item, and
+;;    false otherwise.
+
+;; member? Any (listof Any) -> Bool
+(define (member? item lst)
+  (ormap (lambda (lst-item) (equal? item lst-item)) lst))
 
 
 ;; ---------------
@@ -359,21 +290,24 @@
 ;;    consistent, or else cycles it with respect to history, r, and w,
 ;;    until it is consistent. For codes of length code-length.
 ;; Examples:
-(check-expect (rectify '((N)) '(((0))) '(0) '(0) 1) '((N)))
-(check-expect (rectify '((N) (N)) '(((0) ()) ((0))) '(0 0) '(0 0) 1)
-              '((N) (N)))
-(check-expect (rectify '((0 1 N)) '(((0 1 2))) '(2) '(0) 3)
-              '((0 1 N)))
-(check-expect
- (rectify '((2 N) (0 N N)) '(((1 2) (0)) ((0 1 2))) '(1 1) '(1 0) 3)
- '((N 2) (N 1 N)))
+;(check-expect (rectify '((N)) '(((0))) '(0) '(0) 1) '((N)))
+;(check-expect (rectify '((N) (N)) '(((0) ()) ((0))) '(0 0) '(0 0) 1)
+;              '((N) (N)))
+;(check-expect (rectify '((0 1 N)) '(((0 1 2))) '(2) '(0) 3)
+;              '((0 1 N)))
+;(check-expect
+; (rectify '((2 N) (0 N N)) '(((1 2) (0)) ((0 1 2))) '(1 1) '(1 0) 3)
+; '((N 2) (N 1 N)))
 
 ;; rectify: Guess History (listof Nat) (listof Nat) Nat -> Guess
 ;; Requires:
 ;;    guess is the same length as the first of history
+;;      or guess is 'impossible
 ;;    r and w are the same length as history
 (define (rectify guess history r w code-length)
-  (cond [(rectified? guess (first history) (first r) (first w))
+  (cond [(and (symbol? guess) (symbol=? guess 'impossible))
+         'impossible]
+        [(rectified? guess (first history) (first r) (first w))
          guess]
         [else (rectify (cycle guess history r w code-length)
                        history r w code-length)]))
@@ -384,12 +318,12 @@
 ;;    is a consistent correction of current with count-r red marks and
 ;;    count-w white marks.
 ;; Examples:
-(check-expect (rectified? '((N 2 N) (N 1 N N)) '((1 2 3) (0)) 1 1)
-              true)
-(check-expect (rectified? '((2 N N) (0 N N N)) '((1 2 3) (0)) 1 1)
-              false)
-(check-expect (rectified? '((0 N N) (0 N N N)) '((1 2 3) (0)) 1 1)
-              false)
+;(check-expect (rectified? '((N 2 N) (N 1 N N)) '((1 2 3) (0)) 1 1)
+;              true)
+;(check-expect (rectified? '((2 N N) (0 N N N)) '((1 2 3) (0)) 1 1)
+;              false)
+;(check-expect (rectified? '((0 N N) (0 N N N)) '((1 2 3) (0)) 1 1)
+;              false)
 
 ;; rectified?: Guess Attempt Nat Nat -> Bool
 ;; Requires: guess and current are the same non-zero length
@@ -407,49 +341,49 @@
 ;; (cycle guess history r w code-length) cycles guess with respect to
 ;;    history, r, and w. For codes of length code-length.
 ;; Examples:
-(check-expect
- (cycle '((2 3 5 6 N) (1 N N N N N) (0 N N N N N N))
-        '(((2 3 4 5 6) (1) (0))
-          ((1 2 3 4 5 6) (0))
-          ((0 1 2 3 4 5 6)))
-        '(2 1 1) '(2 0 0) 7)
- '((2 3 5 0 N) (1 N N N N N) (0 N N N N N N)))
-(check-expect
- (cycle '((2 3 5 4 N) (1 N N N N N) (0 N N N N N N))
-        '(((2 3 4 5 6) (1) (0))
-          ((1 2 3 4 5 6) (0))
-          ((0 1 2 3 4 5 6)))
-        '(2 1 1) '(2 0 0) 7)
- '((2 3 6 6 N) (1 N N N N N) (0 N N N N N N)))
-(check-expect
- (cycle '((2 3 3 4 N) (1 N N N N N) (0 N N N N N N))
-        '(((2 3 4 5 6) (1) (0))
-          ((1 2 3 4 5 6) (0))
-          ((0 1 2 3 4 5 6)))
-        '(2 1 1) '(2 0 0) 7)
- '((2 3 5 N 0) (1 N N N N N) (0 N N N N N N)))
-(check-expect
- (cycle '((2 3 N 4 5) (1 N N N N N) (0 N N N N N N))
-        '(((2 3 4 5 6) (1) (0))
-          ((1 2 3 4 5 6) (0))
-          ((0 1 2 3 4 5 6)))
-        '(2 1 1) '(2 0 0) 7)
- '((2 4 4 6 N) (1 N N N N N) (0 N N N N N N)))
-(check-expect
- (cycle '((N 2 3 5 6) (1 N N N N N) (0 N N N N N N))
-        '(((2 3 4 5 6) (1) (0))
-          ((1 2 3 4 5 6) (0))
-          ((0 1 2 3 4 5 6)))
-        '(4 2 1) '(2 0 0) 7)
- '((1 3 4 5 N) (N 2 N N N N) (0 N N N N N N)))
-(check-expect
- (cycle '((5 N N 2) (N N N N 4 5))
-        '(((0 1 2 3) (4 5))
-          ((0 1 2 3 4 5)))
-        '(2 2) '(2 0) 6)
- '((N 2 3 N) (N N N N 4 5)))
-(check-error
- (cycle '((N 1 2)) '(((0 1 2))) '(2) '(0) 3) bad-marking-message)
+;(check-expect
+; (cycle '((2 3 5 6 N) (1 N N N N N) (0 N N N N N N))
+;        '(((2 3 4 5 6) (1) (0))
+;          ((1 2 3 4 5 6) (0))
+;          ((0 1 2 3 4 5 6)))
+;        '(2 1 1) '(2 0 0) 7)
+; '((2 3 5 0 N) (1 N N N N N) (0 N N N N N N)))
+;(check-expect
+; (cycle '((2 3 5 4 N) (1 N N N N N) (0 N N N N N N))
+;        '(((2 3 4 5 6) (1) (0))
+;          ((1 2 3 4 5 6) (0))
+;          ((0 1 2 3 4 5 6)))
+;        '(2 1 1) '(2 0 0) 7)
+; '((2 3 6 6 N) (1 N N N N N) (0 N N N N N N)))
+;(check-expect
+; (cycle '((2 3 3 4 N) (1 N N N N N) (0 N N N N N N))
+;        '(((2 3 4 5 6) (1) (0))
+;          ((1 2 3 4 5 6) (0))
+;          ((0 1 2 3 4 5 6)))
+;        '(2 1 1) '(2 0 0) 7)
+; '((2 3 5 N 0) (1 N N N N N) (0 N N N N N N)))
+;(check-expect
+; (cycle '((2 3 N 4 5) (1 N N N N N) (0 N N N N N N))
+;        '(((2 3 4 5 6) (1) (0))
+;          ((1 2 3 4 5 6) (0))
+;          ((0 1 2 3 4 5 6)))
+;        '(2 1 1) '(2 0 0) 7)
+; '((2 4 4 6 N) (1 N N N N N) (0 N N N N N N)))
+;(check-expect
+; (cycle '((N 2 3 5 6) (1 N N N N N) (0 N N N N N N))
+;        '(((2 3 4 5 6) (1) (0))
+;          ((1 2 3 4 5 6) (0))
+;          ((0 1 2 3 4 5 6)))
+;        '(4 2 1) '(2 0 0) 7)
+; '((1 3 4 5 N) (N 2 N N N N) (0 N N N N N N)))
+;(check-expect
+; (cycle '((5 N N 2) (N N N N 4 5))
+;        '(((0 1 2 3) (4 5))
+;          ((0 1 2 3 4 5)))
+;        '(2 2) '(2 0) 6)
+; '((N 2 3 N) (N N N N 4 5)))
+;(check-expect
+; (cycle '((N 1 2)) '(((0 1 2))) '(2) '(0) 3) 'impossible)
 
 ;; cycle: Guess History (listof Nat) (listof Nat) Nat -> Guess
 ;; Requires:
@@ -458,7 +392,7 @@
 (define (cycle guess history r w code-length)
   ;; Step 1: Stretch whites.
   (if (empty? guess)
-      (error bad-marking-message)
+      'impossible
       (local [(define stretched-mouth
                 (reverse
                  (let loop ([rev-guess-mouth (reverse (first guess))]
@@ -682,8 +616,8 @@
 ;; ---------------
 ;; (simplify guess) removes the extraneous void symbols from guess.
 ;; Examples:
-(check-expect (simplify '((2 3) (1 N N) (0 N N N))) '((2 3) (1) (0)))
-(check-expect (simplify '((0 1 2))) '((0 1 2)))
+;(check-expect (simplify '((2 3) (1 N N) (0 N N N))) '((2 3) (1) (0)))
+;(check-expect (simplify '((0 1 2))) '((0 1 2)))
 
 ;; simplify: Guess -> Attempt
 (define (simplify guess)
@@ -696,9 +630,9 @@
 ;; (red? guess-index index) produces true iff guess-index
 ;;    is a number equal to index.
 ;; Examples:
-(check-expect (red? 1 1) true)
-(check-expect (red? 0 1) false)
-(check-expect (red? 'N 1) false)
+;(check-expect (red? 1 1) true)
+;(check-expect (red? 0 1) false)
+;(check-expect (red? 'N 1) false)
 
 ;; red?: GuessIndex Index -> Bool
 (define (red? guess-index index)
@@ -710,9 +644,9 @@
 ;; (white? guess-index index) produces true iff guess-index
 ;;    is a number different from index.
 ;; Examples:
-(check-expect (white? 1 1) false)
-(check-expect (white? 0 1) true)
-(check-expect (white? 'N 1) false)
+;(check-expect (white? 1 1) false)
+;(check-expect (white? 0 1) true)
+;(check-expect (white? 'N 1) false)
 
 ;; white?: GuessIndex Index -> Bool
 (define (white? guess-index index)
@@ -725,11 +659,11 @@
 ;;    of guess to an initial nr red marks and nw white marks, for a
 ;;    code of length code-length.
 ;; Examples:
-(check-expect (fill 0 0 '((1 2 3) (0 N N N)) 4) '((N N N) (0 N N N)))
-(check-expect (fill 2 0 '((1 2 3) (0 N N N)) 4) '((1 2 N) (0 N N N)))
-(check-expect (fill 0 2 '((1 2 3) (0 N N N)) 4) '((2 3 N) (0 N N N)))
-(check-expect (fill 1 1 '((1 2 3) (0 N N N)) 4) '((1 3 N) (0 N N N)))
-(check-expect (fill 1 2 '((1 2 3) (0 N N N)) 4) '((1 3 0) (0 N N N)))
+;(check-expect (fill 0 0 '((1 2 3) (0 N N N)) 4) '((N N N) (0 N N N)))
+;(check-expect (fill 2 0 '((1 2 3) (0 N N N)) 4) '((1 2 N) (0 N N N)))
+;(check-expect (fill 0 2 '((1 2 3) (0 N N N)) 4) '((2 3 N) (0 N N N)))
+;(check-expect (fill 1 1 '((1 2 3) (0 N N N)) 4) '((1 3 N) (0 N N N)))
+;(check-expect (fill 1 2 '((1 2 3) (0 N N N)) 4) '((1 3 0) (0 N N N)))
 
 ;; fill: Nat Nat Attempt Nat -> Guess
 ;; Requires: nr + nw <= (length (first attempt))
@@ -741,10 +675,10 @@
 ;; (fill-r nr guess) changes the positions in the first of guess to
 ;;    an initial nr red marks and no white marks.
 ;; Examples:
-(check-expect (fill-r 0 '((1 2 3) (0 N N N))) '((N N N) (0 N N N)))
-(check-expect (fill-r 1 '((1 2 3) (0 N N N))) '((1 N N) (0 N N N)))
-(check-expect (fill-r 2 '((1 2 3) (0 N N N))) '((1 2 N) (0 N N N)))
-(check-expect (fill-r 3 '((1 2 3) (0 N N N))) '((1 2 3) (0 N N N)))
+;(check-expect (fill-r 0 '((1 2 3) (0 N N N))) '((N N N) (0 N N N)))
+;(check-expect (fill-r 1 '((1 2 3) (0 N N N))) '((1 N N) (0 N N N)))
+;(check-expect (fill-r 2 '((1 2 3) (0 N N N))) '((1 2 N) (0 N N N)))
+;(check-expect (fill-r 3 '((1 2 3) (0 N N N))) '((1 2 3) (0 N N N)))
 
 ;; fill-r: Nat Guess -> Guess
 ;; Requires:
@@ -765,16 +699,16 @@
 ;;    in the first of guess to an initial nw white marks with respect
 ;;    to the first of current, for a code of length code-length.
 ;; Examples:
-(check-expect (fill-w 0 '((N N N) (0 N N N)) '((1 2 3) (0)) 4)
-              '((N N N) (0 N N N)))
-(check-expect (fill-w 2 '((N N N) (0 N N N)) '((1 2 3) (0)) 4)
-              '((2 3 N) (0 N N N)))
-(check-expect (fill-w 1 '((1 N N) (0 N N N)) '((1 2 3) (0)) 4)
-              '((1 3 N) (0 N N N)))
-(check-expect (fill-w 2 '((1 N N) (0 N N N)) '((1 2 3) (0)) 4)
-              '((1 3 0) (0 N N N)))
-(check-expect (fill-w 0 '((1 2 N) (0 N N N)) '((1 2 3) (0)) 4)
-              '((1 2 N) (0 N N N)))
+;(check-expect (fill-w 0 '((N N N) (0 N N N)) '((1 2 3) (0)) 4)
+;              '((N N N) (0 N N N)))
+;(check-expect (fill-w 2 '((N N N) (0 N N N)) '((1 2 3) (0)) 4)
+;              '((2 3 N) (0 N N N)))
+;(check-expect (fill-w 1 '((1 N N) (0 N N N)) '((1 2 3) (0)) 4)
+;              '((1 3 N) (0 N N N)))
+;(check-expect (fill-w 2 '((1 N N) (0 N N N)) '((1 2 3) (0)) 4)
+;              '((1 3 0) (0 N N N)))
+;(check-expect (fill-w 0 '((1 2 N) (0 N N N)) '((1 2 3) (0)) 4)
+;              '((1 2 N) (0 N N N)))
 
 ;; fill-w: Nat Guess Attempt Nat -> Guess
 (define (fill-w nw guess current code-length)
@@ -805,20 +739,20 @@
 ;; (count red? guess current) produces the number of reds in guess
 ;;    with respect to current if red? is true, or of whites otherwise.
 ;; Examples:
-(check-expect (count true  '((N 1 N N)) '((0 1 2 3))) 1)
-(check-expect (count false '((N 1 N N)) '((0 1 2 3))) 0)
-(check-expect (count true  '((N 2 N) (N 1 N N)) '((1 2 3) (0))) 1)
-(check-expect (count false '((N 2 N) (N 1 N N)) '((1 2 3) (0))) 1)
-(check-expect
- (count true
-        '(() (1 2 0) (N N N 3) (N N N N) (N N N N) (N N N N))
-        '(() (0 2 3) (1) () () ()))
- 2)
-(check-expect
- (count false
-        '(() (1 2 0) (N N N 3) (N N N N) (N N N N) (N N N N))
-        '(() (0 2 3) (1) () () ()))
- 2)
+;(check-expect (count true  '((N 1 N N)) '((0 1 2 3))) 1)
+;(check-expect (count false '((N 1 N N)) '((0 1 2 3))) 0)
+;(check-expect (count true  '((N 2 N) (N 1 N N)) '((1 2 3) (0))) 1)
+;(check-expect (count false '((N 2 N) (N 1 N N)) '((1 2 3) (0))) 1)
+;(check-expect
+; (count true
+;        '(() (1 2 0) (N N N 3) (N N N N) (N N N N) (N N N N))
+;        '(() (0 2 3) (1) () () ()))
+; 2)
+;(check-expect
+; (count false
+;        '(() (1 2 0) (N N N 3) (N N N N) (N N N N) (N N N N))
+;        '(() (0 2 3) (1) () () ()))
+; 2)
 
 ;; count: Bool Guess Attempt -> Nat
 ;; Requires: guess and current are the same length
@@ -838,10 +772,10 @@
 ;; ---------------
 ;; (add-mod a b n) produces the sum of a and b, modulo n.
 ;; Examples:
-(check-expect (add-mod 1 2 4) 3)
-(check-expect (add-mod 1 2 3) 0)
-(check-expect (add-mod 0 2 3) 2)
-(check-expect (add-mod 2 2 3) 1)
+;(check-expect (add-mod 1 2 4) 3)
+;(check-expect (add-mod 1 2 3) 0)
+;(check-expect (add-mod 0 2 3) 2)
+;(check-expect (add-mod 2 2 3) 1)
 
 ;; add-mod: Nat Nat Nat -> Nat
 ;; Requires:
@@ -849,44 +783,3 @@
 ;;    0 <= b < n
 (define (add-mod a b n)
   (modulo (+ a b) n))
-
-
-;; ---------------
-;; (stringify-attempt attempt) converts attempt to a readable string.
-;; Examples:
-(check-expect (stringify-attempt '((0 1 2 3))) " 0 0 0 0")
-(check-expect (stringify-attempt '((1 2 3) (0))) " 0 1 1 1")
-(check-expect
- (stringify-attempt '((8) (2) (7) (6) (5) (1) (4) (10) (0) (9) (3)))
- " 2 5 9 0 4 6 7 8 10 1 3")
-
-;; stringify-attempt: Attempt -> Str
-(define (stringify-attempt attempt)
-  (local [(define (attempt->list attempt)
-            (local [(define labelled
-                      (let loop ([attempt attempt])
-                        (cond [(empty? attempt) empty]
-                              [else
-                               (cons (map (lambda (index)
-                                            (list index
-                                                  (length
-                                                   (rest attempt))))
-                                          (first attempt))
-                                     (loop (rest attempt)))])))
-
-                    (define sorted
-                      (quicksort (foldr append empty labelled)
-                                 (lambda (pair1 pair2)
-                                   (< (first pair1) (first pair2)))))]
-
-              (map second sorted)))
-
-          (define (stringify-list lst)
-            (foldr string-append ""
-                   (map (lambda (colour)
-                          (string-append " " (number->string colour)))
-                        lst)))]
-
-    (stringify-list (attempt->list attempt))))
-
-
