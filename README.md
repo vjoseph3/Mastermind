@@ -1,5 +1,5 @@
 # Mastermind
 A program that guesses a secret code based on feedback.
 </br></br>
-At the moment this repo contains a single file that runs in DrRacket,
-taking the role of "mind" in the popular game of Mastermind.
+At the moment, mastermind.rkt provides a few core functions,
+and mastermind-gui.rkt connects them to an interactive function.
