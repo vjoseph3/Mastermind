@@ -45,7 +45,7 @@
 
 
 ;; -------------------------------------------------------------------
-;; Discussion and Terminology
+;; Algorithm Discussion and Terminology
 
 ;; In this discussion, a basic familiarity with the game of Mastermind
 ;;    is assumed.
@@ -53,12 +53,12 @@
 ;;    which entails generating guesses based on previous attempts and
 ;;    their associated marks. For ease of computation, the colours of
 ;;    which the code is comprised are represented by natural numbers.
-;;    Marks are supplied in aggregate per attempt, where Red marks
-;;    represent the right colour in the Right spot, and White marks
+;;    Marks are supplied in aggregate per attempt, where R marks
+;;    represent the right colour in the Right spot, and W marks
 ;;    represent the right colour in the Wrong spot. Past attempts are
 ;;    stored in a list, ordered with the most recent attempt at the
 ;;    front of the list. Marks are stored similarly, with separate
-;;    lists for red and white marks.
+;;    lists for R and W marks.
 ;; Past attempts are stored in a different format from how they would
 ;;    typically be displayed. Considering the typical display format
 ;;    as an indexed list, this storage format specifies a list of
@@ -85,51 +85,49 @@
 ;;    attempt. The real difference between the guess and an attempt is
 ;;    that the guess retains "void symbols" from previous assignments.
 ;;    Void symbols are place markers for the indices assigned as not
-;;    having merited either a red or white mark. They take the form of
+;;    having merited either an R or W mark. They take the form of
 ;;    the value 'N. When a consistent arrangement is found, the void
 ;;    symbols are filtered out of the guess, a new list of all missing
 ;;    indices is added to the front of the guess, and this is added
-;;    onto the front of the list of past attempts. It is also printed
-;;    in readable form with drop-down selections for the user to
-;;    specify the red and white aggregate marks for that attempt.
+;;    onto the front of the list of past attempts.
 ;; Since the largest colours are cycled first, and since they are
 ;;    always the most recent and so appear at the front of the guess,
 ;;    enough calculation is performed on the first list in the guess
 ;;    to warrant its own name: the "mouth" of the guess. Similarly,
 ;;    each attempt has a mouth, against which the guess mouth can be
-;;    compared to distinguish red and white assignments. This
+;;    compared to distinguish R and W assignments. This
 ;;    comparison is crucial to the cycling process, which proceeds as
 ;;    follows:
-;;       1. Stretch whites
-;;             A white in the guess mouth (a number different from
+;;       1. Stretch Ws
+;;             A W in the guess mouth (a number different from
 ;;             its correspondent in the current attempt mouth)
 ;;             is "stretchable" if it can be "stretched" once without
-;;             becoming a red (the same as its correspondent). To
-;;             stretch a white, add 1 to it. If this results in an
+;;             becoming an R (the same as its correspondent). To
+;;             stretch a W, add 1 to it. If this results in an
 ;;             index beyond the code length, replace it with 0.
-;;          In this step, stretch the last stretchable white in the
-;;             guess mouth, and do the following to all later whites:
+;;          In this step, stretch the last stretchable W in the
+;;             guess mouth, and do the following to all later Ws:
 ;;                1. Set equal to correspondent,
-;;                2. Stretch once. The white is now called "fresh."
-;;             Only if there is no stretchable white, move to step 2.
-;;       2. Move whites
-;;             To "move" a white or red to a void symbol, simply set
-;;             the white or red as a void symbol and the void symbol
-;;             as a fresh white or a red. A white or red is "movable"
+;;                2. Stretch once. The W is now called "fresh."
+;;             Only if there is no stretchable W, move to step 2.
+;;       2. Move Ws
+;;             To "move" a W or R to a void symbol, simply set
+;;             the W or R as a void symbol and the void symbol
+;;             as a fresh W or an R. A W or R is "movable"
 ;;             if a void symbol occurs after it in the guess mouth.
-;;          In this step, move the last movable white to the next
-;;             void symbol. Move each later white as far to the front
-;;             as possible without changing the order of the whites.
-;;             Only if there is no movable white, move to step 3.
-;;       3. Move reds
-;;          In this step, first count the number of whites and set
+;;          In this step, move the last movable W to the next
+;;             void symbol. Move each later W as far to the front
+;;             as possible without changing the order of the Ws.
+;;             Only if there is no movable W, move to step 3.
+;;       3. Move Rs
+;;          In this step, first count the number of Ws and set
 ;;             them all as void symbols. Then move the last movable
-;;             red to the next void symbol, and move each later red
+;;             R to the next void symbol, and move each later R
 ;;             as far to the front as possible without changing the
-;;             order of the reds. Finally, recalling the number of
-;;             whites, set the first that many void symbols as fresh
-;;             whites.
-;;             Only if there is no movable red, move to step 4.
+;;             order of the Rs. Finally, recalling the number of
+;;             Ws, set the first that many void symbols as fresh
+;;             Ws.
+;;             Only if there is no movable R, move to step 4.
 ;;       4. Step back one level
 ;;          In this step, the guess mouth cannot be cycled. Go to the
 ;;             previous attempt by taking the rest of the guess and
@@ -138,7 +136,7 @@
 ;;             cycle until it is consistent.
 ;; The first guess is always comprised only of the smallest colour, 0,
 ;;    since there are no previous marks. Each successive guess adds
-;;    another colour, until the sum of red and white marks is equal
+;;    another colour, until the sum of R and W marks is equal
 ;;    to the length of the code. At that point, the colours in the
 ;;    master code are known, and they are simply rearranged until the
 ;;    correct arrangement is discovered.
@@ -159,9 +157,9 @@
 ;;    containing every possible Index exactly once.
 
 ;; A History is a non-empty (listof Attempt)
-;; Requires:
-;;    The last Attempt has length 1
-;;    Each Attempt has length 1 more than the next
+;; requires:
+;;    the last Attempt has length 1
+;;    each Attempt has length 1 more than the next
 
 ;; An AttemptMouth is a (listof Index)
 
@@ -174,10 +172,10 @@
 ;; A GuessMouth is a (listof GuessIndex)
 
 (define-struct board
-  (guess history reds whites code-length pool-size))
+  (guess history rs ws code-length pool-size))
 ;; A Board is a
 ;;    (make-board Guess History (listof Index) (listof Index) Nat Nat)
-;; Requires: history, reds, and whites are all the same length
+;; requires: history, rs, and ws are all the same length
 
 
 ;; -------------------------------------------------------------------
@@ -190,31 +188,30 @@
 ;; Implementation
 
 (define (first-play code-length pool-size)
-  (define guess   (list (build-list code-length (lambda (n) n))))
+  (define guess (list (build-list code-length identity)))
   (define history empty)
-  (define reds    empty)
-  (define whites  empty)
+  (define rs empty)
+  (define ws empty)
   
-  (make-board guess history reds whites code-length pool-size))
+  (make-board guess history rs ws code-length pool-size))
 
 
-(define (play board new-red new-white)
+(define (play board new-r new-w)
   (define guess       (board-guess       board))
   (define history     (board-history     board))
-  (define reds        (board-reds        board))
-  (define whites      (board-whites      board))
+  (define rs          (board-rs          board))
+  (define ws          (board-ws          board))
   (define code-length (board-code-length board))
   (define pool-size   (board-pool-size   board))
 
   (define new-history (cons (simplify guess) history))
-  (define new-reds    (cons new-red reds))
-  (define new-whites  (cons new-white whites))
+  (define new-rs      (cons new-r rs))
+  (define new-ws      (cons new-w ws))
   (define new-guess   (complete (generate guess new-history
-                                          new-reds new-whites
-                                          code-length)
+                                          new-rs new-ws code-length)
                                 code-length))
 
-  (make-board new-guess new-history new-reds new-whites
+  (make-board new-guess new-history new-rs new-ws
               code-length pool-size))
 
 
@@ -233,34 +230,30 @@
 
 
 (define (r-history board)
-  (board-reds board))
+  (board-rs board))
 
 
 (define (w-history board)
-  (board-whites board))
+  (board-ws board))
 
 
-;; ---------------
 ;; Board -> Bool
-;; determines whether the current guess on the board uses colours
-;;    that are not available.
+;; determine whether the current guess on the board uses colours
+;;    that are not available
 (define (colours-exhausted? board)
   (and (> (length (board-guess board))
           (board-pool-size board))
        (not (empty? (first (board-guess board))))))
 
 
-;; ---------------
-;; (generate guess history r w code-length) produces a consistent
-;;    arrangement distributing r and w through history, cycling from a
-;;    numerical correction of guess, for codes of length code-length.
-
-;; generate: Guess History (listof Nat) (listof Nat) Nat -> Guess
-;; Requires:
+;; Guess History (listof Nat) (listof Nat) Nat -> Guess
+;; requires:
 ;;    guess is the same length as the first of history
 ;;      or guess is 'impossible
-;;    r and w are the same length as history
-(define (generate guess history r w code-length)
+;;    rs and ws are the same length as history
+;; produce a consistent arrangement distributing rs and ws through
+;;    history, cycling from a numerical correction of guess
+(define (generate guess history rs ws code-length)
   (cond [(and (symbol? guess) (symbol=? guess 'impossible))
          'impossible]
         [else
@@ -269,8 +262,8 @@
          (define count-r (count true (rest guess) (rest current)))
          (define count-w (count false (rest guess) (rest current)))
 
-         (define excess-r (- (first r) count-r))
-         (define excess-w (- (first w) count-w))
+         (define excess-r (- (first rs) count-r))
+         (define excess-w (- (first ws) count-w))
 
          (if (and (>= excess-r 0)
                   (>= excess-w 0))
@@ -278,70 +271,58 @@
                             excess-w
                             (cons (first current) (rest guess))
                             code-length)
-                      history r w code-length)
+                      history rs ws code-length)
              (generate (complete (rectify (cycle (rest guess)
                                                  (rest history)
-                                                 (rest r)
-                                                 (rest w)
+                                                 (rest rs)
+                                                 (rest ws)
                                                  code-length)
                                           (rest history)
-                                          (rest r)
-                                          (rest w)
+                                          (rest rs)
+                                          (rest ws)
                                           code-length)
                                  code-length)
-                       history r w code-length))]))
+                       history rs ws code-length))]))
 
 
-;; ---------------
-;; (complete guess code-length) adds onto the front of guess
-;;    a list of all indices less than code-length that are not
-;;    already in guess.
-
-;; complete: Guess Nat -> Guess
+;; Guess Nat -> Guess
+;; add onto the front of guess a list of all indices less than
+;;    code-length that are not already in guess
 (define (complete rguess code-length)
   (if (and (symbol? rguess) (symbol=? rguess 'impossible))
       'impossible
       (cons (filter (lambda (n)
                       (not (member? n (foldr append '() rguess))))
-                    (build-list code-length (lambda (n) n)))
+                    (build-list code-length identity))
             rguess)))
 
 
-;; ---------------
-;; (member? item lst) produces true if lst contains item, and
-;;    false otherwise.
-
-;; member? Any (listof Any) -> Bool
+;; Any (listof Any) -> Bool
+;; determine whether lst contains item
 (define (member? item lst)
   (ormap (lambda (lst-item) (equal? item lst-item)) lst))
 
 
-;; ---------------
-;; (rectify guess history r w code-length) produces guess if it is
-;;    consistent, or else cycles it with respect to history, r, and w,
-;;    until it is consistent. For codes of length code-length.
-
-;; rectify: Guess History (listof Nat) (listof Nat) Nat -> Guess
-;; Requires:
+;; Guess History (listof Nat) (listof Nat) Nat -> Guess
+;; requires:
 ;;    guess is the same length as the first of history
 ;;      or guess is 'impossible
-;;    r and w are the same length as history
-(define (rectify guess history r w code-length)
+;;    rs and ws are the same length as history
+;; produces guess if it is consistent, or else cycle it with respect
+;;    to history, rs, and ws, until it is consistent
+(define (rectify guess history rs ws code-length)
   (cond [(and (symbol? guess) (symbol=? guess 'impossible))
          'impossible]
-        [(rectified? guess (first history) (first r) (first w))
+        [(rectified? guess (first history) (first rs) (first ws))
          guess]
-        [else (rectify (cycle guess history r w code-length)
-                       history r w code-length)]))
+        [else (rectify (cycle guess history rs ws code-length)
+                       history rs ws code-length)]))
 
 
-;; ---------------
-;; (rectified? guess current count-r count-w) produces true iff guess
-;;    is a consistent correction of current with count-r red marks and
-;;    count-w white marks.
-
-;; rectified?: Guess Attempt Nat Nat -> Bool
-;; Requires: guess and current are the same non-zero length
+;; Guess Attempt Nat Nat -> Bool
+;; requires: guess and current are the same non-zero length
+;; determine whether guess is a consistent correction of current
+;;    with count-r R marks and count-w W marks
 (define (rectified? guess current count-r count-w)
   (and (let no-double-numbers ([lst (foldr append '() guess)])
          (or (empty? lst)
@@ -352,16 +333,13 @@
        (= count-w (count false guess current))))
 
 
-;; ---------------
-;; (cycle guess history r w code-length) cycles guess with respect to
-;;    history, r, and w. For codes of length code-length.
-
-;; cycle: Guess History (listof Nat) (listof Nat) Nat -> Guess
-;; Requires:
+;; Guess History (listof Nat) (listof Nat) Nat -> Guess
+;; requires:
 ;;    guess is the same length as the first of history
-;;    guess is numerically correct with respect to history, r, and w
-(define (cycle guess history r w code-length)
-  ;; Step 1: Stretch whites.
+;;    guess is numerically correct with respect to history, rs, and ws
+;; cycle guess with respect to history, rs, and ws
+(define (cycle guess history rs ws code-length)
+  ;; Step 1: Stretch Ws.
   (if (empty? guess)
       'impossible
       (local [(define stretched-mouth
@@ -379,7 +357,7 @@
 
                             (cond
                               [(or (symbol? guess-index)
-                                   (red? guess-index index))
+                                   (r? guess-index index))
                                (cons guess-index
                                      (loop (rest rev-guess-mouth)
                                            (rest rev-current-mouth)))]
@@ -398,7 +376,7 @@
               (length (first guess)))
            (cons stretched-mouth (rest guess))]
           [else
-           ;; Step 2: Move whites.
+           ;; Step 2: Move Ws.
            (local [(define index-and-count
                      (let loop ([this-index
                                  (sub1
@@ -419,7 +397,7 @@
 
                                 (cond
                                   [found-void-symbol?
-                                   (cond [(white? guess-index index)
+                                   (cond [(w? guess-index index)
                                           (list this-index
                                                 (add1 temp-count))]
                                          [else
@@ -429,7 +407,7 @@
                                            (rest rev-guess-mouth)
                                            (rest rev-current-mouth)
                                            true)])]
-                                  [(white? guess-index index)
+                                  [(w? guess-index index)
                                    (loop (sub1 this-index)
                                          (add1 temp-count)
                                          (rest rev-guess-mouth)
@@ -456,36 +434,36 @@
                 (local [(define w-moved-mouth
                           (let loop
                             ([steps-until-move index-movable-w]
-                             [whites-to-make count-later-w]
+                             [ws-to-make count-later-w]
                              [guess-mouth (rest stretched-mouth)]
                              [current-mouth
                               (first (first history))])
                             (cond [(> steps-until-move 0)
                                    (cons (first guess-mouth)
                                          (loop (sub1 steps-until-move)
-                                               whites-to-make
+                                               ws-to-make
                                                (rest guess-mouth)
                                                (rest current-mouth)))]
                                   [(zero? steps-until-move)
                                    (cons void-symbol
                                          (loop -1
-                                               whites-to-make
+                                               ws-to-make
                                                (rest guess-mouth)
                                                (rest current-mouth)))]
                                   [(empty? guess-mouth) empty]
-                                  [(red? (first guess-mouth)
+                                  [(r? (first guess-mouth)
                                          (first current-mouth))
                                    (cons (first guess-mouth)
                                          (loop -1
-                                               whites-to-make
+                                               ws-to-make
                                                (rest guess-mouth)
                                                (rest current-mouth)))]
-                                  [(> whites-to-make 0)
+                                  [(> ws-to-make 0)
                                    (cons (add-mod
                                           1 (first current-mouth)
                                           code-length)
                                          (loop -1
-                                               (sub1 whites-to-make)
+                                               (sub1 ws-to-make)
                                                (rest guess-mouth)
                                                (rest current-mouth)))]
                                   [else
@@ -498,10 +476,10 @@
 
                   (cons w-moved-mouth (rest guess)))]
                [else
-                ;; Step 3: Move reds.
+                ;; Step 3: Move Rs.
                 (local [(define w-removed-mouth
                           (map (lambda (guess-index index)
-                                 (cond [(red? guess-index index)
+                                 (cond [(r? guess-index index)
                                         guess-index]
                                        [else void-symbol]))
                                (rest stretched-mouth)
@@ -533,7 +511,7 @@
                                (let loop
                                  ([steps-until-move
                                    index-movable-r]
-                                  [reds-to-make 'to-be-determined]
+                                  [rs-to-make 'to-be-determined]
                                   [guess-mouth w-removed-mouth]
                                   [current-mouth
                                    (first (first history))])
@@ -541,7 +519,7 @@
                                         (cons (first guess-mouth)
                                               (loop
                                                (sub1 steps-until-move)
-                                               reds-to-make
+                                               rs-to-make
                                                (rest guess-mouth)
                                                (rest current-mouth)))]
                                        [(zero? steps-until-move)
@@ -553,11 +531,11 @@
                                                         guess-mouth))
                                                (rest guess-mouth)
                                                (rest current-mouth)))]
-                                       [(> reds-to-make 0)
+                                       [(> rs-to-make 0)
                                         (cons (first current-mouth)
                                               (loop
                                                -1
-                                               (sub1 reds-to-make)
+                                               (sub1 rs-to-make)
                                                (rest guess-mouth)
                                                (rest current-mouth)))]
                                        [else
@@ -573,66 +551,53 @@
                      (generate (complete (rectify (cycle
                                                    (rest guess)
                                                    (rest history)
-                                                   (rest r)
-                                                   (rest w)
+                                                   (rest rs)
+                                                   (rest ws)
                                                    code-length)
                                                   (rest history)
-                                                  (rest r)
-                                                  (rest w)
+                                                  (rest rs)
+                                                  (rest ws)
                                                   code-length)
                                          code-length)
-                               history r w code-length)]))]))]))))
+                               history rs ws code-length)]))]))]))))
 
 
-;; ---------------
-;; (simplify guess) removes the extraneous void symbols from guess.
-
-;; simplify: Guess -> Attempt
+;; Guess -> Attempt
+;; remove the extraneous void symbols from guess
 (define (simplify guess)
   (map (lambda (inner-mouth)
          (filter number? inner-mouth))
        guess))
 
 
-;; ---------------
-;; (red? guess-index index) produces true iff guess-index
-;;    is a number equal to index.
-
-;; red?: GuessIndex Index -> Bool
-(define (red? guess-index index)
+;; GuessIndex Index -> Bool
+;; determine whether guess-index is a number equal to index
+(define (r? guess-index index)
   (and (number? guess-index)
        (= guess-index index)))
 
 
-;; ---------------
-;; (white? guess-index index) produces true iff guess-index
-;;    is a number different from index.
-
-;; white?: GuessIndex Index -> Bool
-(define (white? guess-index index)
+;; GuessIndex Index -> Bool
+;; determine whether guess-index is a number different from index
+(define (w? guess-index index)
   (and (number? guess-index)
        (not (= guess-index index))))
 
 
-;; ---------------
-;; (fill nr nw attempt code-length) changes the positions in the first
-;;    of guess to an initial nr red marks and nw white marks, for a
-;;    code of length code-length.
-
-;; fill: Nat Nat Attempt Nat -> Guess
-;; Requires: nr + nw <= (length (first attempt))
+;; Nat Nat Attempt Nat -> Guess
+;; requires: nr + nw <= (length (first attempt))
+;; change the positions in the first of guess to an initial nr R marks
+;;    and nw W marks
 (define (fill nr nw attempt code-length)
   (fill-w nw (fill-r nr attempt) attempt code-length))
 
 
-;; ---------------
-;; (fill-r nr guess) changes the positions in the first of guess to
-;;    an initial nr red marks and no white marks.
-
-;; fill-r: Nat Guess -> Guess
-;; Requires:
+;; Nat Guess -> Guess
+;; requires:
 ;;    the first of guess contains only numbers
 ;;    nr <= (length guess)
+;; change the positions in the first of guess to an initial nr R marks
+;;    and no W marks
 (define (fill-r nr guess)
   (cons (let fill-r/mouth ([mouth (first guess)] [nr nr])
           (cond [(zero? nr)
@@ -643,12 +608,9 @@
         (rest guess)))
 
 
-;; ---------------
-;; (fill-w nw guess current code-length) changes the void symbols
-;;    in the first of guess to an initial nw white marks with respect
-;;    to the first of current, for a code of length code-length.
-
-;; fill-w: Nat Guess Attempt Nat -> Guess
+;; Nat Guess Attempt Nat -> Guess
+;; change the void symbols in the first of guess to an initial nw
+;;    W marks with respect to the first of current
 (define (fill-w nw guess current code-length)
   (cons (let fill-w/mouth ([guess-mouth (first guess)]
                            [current-mouth (first current)]
@@ -673,41 +635,34 @@
         (rest guess)))
 
 
-;; ---------------
-;; (count red? guess current) produces the number of reds in guess
-;;    with respect to current if red? is true, or of whites otherwise.
-
-;; count: Bool Guess Attempt -> Nat
-;; Requires: guess and current are the same length
-(define (count red? guess current)
+;; Bool Guess Attempt -> Nat
+;; requires: guess and current are the same length
+;; count the number of Rs in guess with respect to current if r? is
+;;    true, or of Ws otherwise
+(define (count r? guess current)
   (foldl + 0
          (map (lambda (guess-mouth current-mouth)
                 (length (filter (lambda (guess-index)
                                   (if (member? guess-index
                                                current-mouth)
-                                      red?
-                                      (not red?)))
+                                      r?
+                                      (not r?)))
                                 guess-mouth)))
               (simplify guess)
               current)))
 
 
-;; ---------------
-;; (add-mod a b n) produces the sum of a and b, modulo n.
-
-;; add-mod: Nat Nat Nat -> Nat
-;; Requires:
+;; Nat Nat Nat -> Nat
+;; requires:
 ;;    0 <= a < n
 ;;    0 <= b < n
+;; calculate a + b mod n
 (define (add-mod a b n)
   (modulo (+ a b) n))
 
 
-;; ---------------
-;; (attempt->list attempt) produces the list of Colours represented
-;;    by attempt
-
-;; attempt->list: Attempt -> (listof Colour)
+;; Attempt -> (listof Colour)
+;; produce the list of Colours represented by attempt
 (define (attempt->list attempt)
   (define (value-label val lst)
     (map (lambda (item) (list item val)) lst))
@@ -811,15 +766,15 @@
 (check-expect (simplify '((2 3) (1 N N) (0 N N N))) '((2 3) (1) (0)))
 (check-expect (simplify '((0 1 2))) '((0 1 2)))
 
-;; red?
-(check-expect (red? 1 1) true)
-(check-expect (red? 0 1) false)
-(check-expect (red? 'N 1) false)
+;; r?
+(check-expect (r? 1 1) true)
+(check-expect (r? 0 1) false)
+(check-expect (r? 'N 1) false)
 
-;; white?
-(check-expect (white? 1 1) false)
-(check-expect (white? 0 1) true)
-(check-expect (white? 'N 1) false)
+;; w?
+(check-expect (w? 1 1) false)
+(check-expect (w? 0 1) true)
+(check-expect (w? 'N 1) false)
 
 ;; fill
 (check-expect (fill 0 0 '((1 2 3) (0 N N N)) 4) '((N N N) (0 N N N)))
