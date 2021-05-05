@@ -6,11 +6,42 @@
 
 #lang racket
 
-(provide (prefix-out mastermind- (combine-out play
-                                              first-play
-                                              game-over?
-                                              impossible?
-                                              (struct-out board))))
+(require test-engine/racket-tests)
+
+;; the module plays a game of Mastermind, in the "mind" role
+
+(provide
+ (prefix-out
+  mastermind-
+  (combine-out
+
+   ;; Nat Nat -> Board
+   ;; make the first play, given code length and pool size
+   first-play
+
+   ;; Board Nat Nat -> Board
+   ;; make another play, given the play history and new marks
+   play
+
+   ;; Board -> Bool
+   ;; check if the previous play concluded with no solution
+   impossible?
+
+   ;; Board -> (listof Nat)
+   ;; retrieve the latest (unmarked) guess on the board
+   current-guess
+
+   ;; Board -> (listof (listof Nat))
+   ;; retrieve a list of past guesses from the board, latest first
+   guess-history
+
+   ;; Board -> (listof Nat)
+   ;; retrieve a list of past R marks from the board, latest first
+   r-history
+
+   ;; Board -> (listof Nat)
+   ;; retrieve a list of past W marks from the board, latest first
+   w-history)))
 
 
 ;; -------------------------------------------------------------------
@@ -156,7 +187,7 @@
 
 
 ;; -------------------------------------------------------------------
-;; Main Function
+;; Implementation
 
 (define (first-play code-length pool-size)
   (define guess   (list (build-list code-length (lambda (n) n))))
@@ -165,6 +196,7 @@
   (define whites  empty)
   
   (make-board guess history reds whites code-length pool-size))
+
 
 (define (play board new-red new-white)
   (define guess       (board-guess       board))
@@ -185,40 +217,43 @@
   (make-board new-guess new-history new-reds new-whites
               code-length pool-size))
 
-(define (game-over? board)
-  (= (first (board-reds board))
-     (board-code-length board)))
 
 (define (impossible? board)
   (or (and (symbol? (board-guess board))
            (symbol=? (board-guess board) 'impossible))
       (colours-exhausted? board)))
 
+
+(define (current-guess board)
+  (attempt->list (simplify (board-guess board))))
+
+
+(define (guess-history board)
+  (map attempt->list (board-history board)))
+
+
+(define (r-history board)
+  (board-reds board))
+
+
+(define (w-history board)
+  (board-whites board))
+
+
+;; ---------------
+;; Board -> Bool
+;; determines whether the current guess on the board uses colours
+;;    that are not available.
 (define (colours-exhausted? board)
   (and (> (length (board-guess board))
           (board-pool-size board))
        (not (empty? (first (board-guess board))))))
 
 
-;; -------------------------------------------------------------------
-;; Helper Functions
-
 ;; ---------------
 ;; (generate guess history r w code-length) produces a consistent
 ;;    arrangement distributing r and w through history, cycling from a
 ;;    numerical correction of guess, for codes of length code-length.
-;; Examples:
-;(check-expect (generate '((0)) '(((0))) '(0) '(0) 1) '((N)))
-;(check-expect (generate '((0) (N)) '(((0) ()) ((0))) '(0 0) '(0 0) 1)
-;              '((N) (N)))
-;(check-expect (generate '((0 1 2)) '(((0 1 2))) '(2) '(0) 3)
-;              '((0 1 N)))
-;(check-expect
-; (generate '((1 2) (0 N N)) '(((1 2) (0)) ((0 1 2))) '(1 1) '(1 0) 3)
-; '((N 2) (N 1 N)))
-;(check-expect
-; (generate '((1 2) (0 N N)) '(((1 2) (0)) ((0 1 2))) '(0 1) '(1 0) 3)
-; '((N N) (N 1 N)))
 
 ;; generate: Guess History (listof Nat) (listof Nat) Nat -> Guess
 ;; Requires:
@@ -261,10 +296,6 @@
 ;; (complete guess code-length) adds onto the front of guess
 ;;    a list of all indices less than code-length that are not
 ;;    already in guess.
-;; Examples:
-;(check-expect (complete '((0 N N N)) 4) '((1 2 3) (0 N N N)))
-;(check-expect (complete '((N 2 N) (N 1 N N)) 4)
-;              '((0 3) (N 2 N) (N 1 N N)))
 
 ;; complete: Guess Nat -> Guess
 (define (complete rguess code-length)
@@ -289,15 +320,6 @@
 ;; (rectify guess history r w code-length) produces guess if it is
 ;;    consistent, or else cycles it with respect to history, r, and w,
 ;;    until it is consistent. For codes of length code-length.
-;; Examples:
-;(check-expect (rectify '((N)) '(((0))) '(0) '(0) 1) '((N)))
-;(check-expect (rectify '((N) (N)) '(((0) ()) ((0))) '(0 0) '(0 0) 1)
-;              '((N) (N)))
-;(check-expect (rectify '((0 1 N)) '(((0 1 2))) '(2) '(0) 3)
-;              '((0 1 N)))
-;(check-expect
-; (rectify '((2 N) (0 N N)) '(((1 2) (0)) ((0 1 2))) '(1 1) '(1 0) 3)
-; '((N 2) (N 1 N)))
 
 ;; rectify: Guess History (listof Nat) (listof Nat) Nat -> Guess
 ;; Requires:
@@ -317,13 +339,6 @@
 ;; (rectified? guess current count-r count-w) produces true iff guess
 ;;    is a consistent correction of current with count-r red marks and
 ;;    count-w white marks.
-;; Examples:
-;(check-expect (rectified? '((N 2 N) (N 1 N N)) '((1 2 3) (0)) 1 1)
-;              true)
-;(check-expect (rectified? '((2 N N) (0 N N N)) '((1 2 3) (0)) 1 1)
-;              false)
-;(check-expect (rectified? '((0 N N) (0 N N N)) '((1 2 3) (0)) 1 1)
-;              false)
 
 ;; rectified?: Guess Attempt Nat Nat -> Bool
 ;; Requires: guess and current are the same non-zero length
@@ -340,50 +355,6 @@
 ;; ---------------
 ;; (cycle guess history r w code-length) cycles guess with respect to
 ;;    history, r, and w. For codes of length code-length.
-;; Examples:
-;(check-expect
-; (cycle '((2 3 5 6 N) (1 N N N N N) (0 N N N N N N))
-;        '(((2 3 4 5 6) (1) (0))
-;          ((1 2 3 4 5 6) (0))
-;          ((0 1 2 3 4 5 6)))
-;        '(2 1 1) '(2 0 0) 7)
-; '((2 3 5 0 N) (1 N N N N N) (0 N N N N N N)))
-;(check-expect
-; (cycle '((2 3 5 4 N) (1 N N N N N) (0 N N N N N N))
-;        '(((2 3 4 5 6) (1) (0))
-;          ((1 2 3 4 5 6) (0))
-;          ((0 1 2 3 4 5 6)))
-;        '(2 1 1) '(2 0 0) 7)
-; '((2 3 6 6 N) (1 N N N N N) (0 N N N N N N)))
-;(check-expect
-; (cycle '((2 3 3 4 N) (1 N N N N N) (0 N N N N N N))
-;        '(((2 3 4 5 6) (1) (0))
-;          ((1 2 3 4 5 6) (0))
-;          ((0 1 2 3 4 5 6)))
-;        '(2 1 1) '(2 0 0) 7)
-; '((2 3 5 N 0) (1 N N N N N) (0 N N N N N N)))
-;(check-expect
-; (cycle '((2 3 N 4 5) (1 N N N N N) (0 N N N N N N))
-;        '(((2 3 4 5 6) (1) (0))
-;          ((1 2 3 4 5 6) (0))
-;          ((0 1 2 3 4 5 6)))
-;        '(2 1 1) '(2 0 0) 7)
-; '((2 4 4 6 N) (1 N N N N N) (0 N N N N N N)))
-;(check-expect
-; (cycle '((N 2 3 5 6) (1 N N N N N) (0 N N N N N N))
-;        '(((2 3 4 5 6) (1) (0))
-;          ((1 2 3 4 5 6) (0))
-;          ((0 1 2 3 4 5 6)))
-;        '(4 2 1) '(2 0 0) 7)
-; '((1 3 4 5 N) (N 2 N N N N) (0 N N N N N N)))
-;(check-expect
-; (cycle '((5 N N 2) (N N N N 4 5))
-;        '(((0 1 2 3) (4 5))
-;          ((0 1 2 3 4 5)))
-;        '(2 2) '(2 0) 6)
-; '((N 2 3 N) (N N N N 4 5)))
-;(check-expect
-; (cycle '((N 1 2)) '(((0 1 2))) '(2) '(0) 3) 'impossible)
 
 ;; cycle: Guess History (listof Nat) (listof Nat) Nat -> Guess
 ;; Requires:
@@ -615,9 +586,6 @@
 
 ;; ---------------
 ;; (simplify guess) removes the extraneous void symbols from guess.
-;; Examples:
-;(check-expect (simplify '((2 3) (1 N N) (0 N N N))) '((2 3) (1) (0)))
-;(check-expect (simplify '((0 1 2))) '((0 1 2)))
 
 ;; simplify: Guess -> Attempt
 (define (simplify guess)
@@ -629,10 +597,6 @@
 ;; ---------------
 ;; (red? guess-index index) produces true iff guess-index
 ;;    is a number equal to index.
-;; Examples:
-;(check-expect (red? 1 1) true)
-;(check-expect (red? 0 1) false)
-;(check-expect (red? 'N 1) false)
 
 ;; red?: GuessIndex Index -> Bool
 (define (red? guess-index index)
@@ -643,10 +607,6 @@
 ;; ---------------
 ;; (white? guess-index index) produces true iff guess-index
 ;;    is a number different from index.
-;; Examples:
-;(check-expect (white? 1 1) false)
-;(check-expect (white? 0 1) true)
-;(check-expect (white? 'N 1) false)
 
 ;; white?: GuessIndex Index -> Bool
 (define (white? guess-index index)
@@ -658,12 +618,6 @@
 ;; (fill nr nw attempt code-length) changes the positions in the first
 ;;    of guess to an initial nr red marks and nw white marks, for a
 ;;    code of length code-length.
-;; Examples:
-;(check-expect (fill 0 0 '((1 2 3) (0 N N N)) 4) '((N N N) (0 N N N)))
-;(check-expect (fill 2 0 '((1 2 3) (0 N N N)) 4) '((1 2 N) (0 N N N)))
-;(check-expect (fill 0 2 '((1 2 3) (0 N N N)) 4) '((2 3 N) (0 N N N)))
-;(check-expect (fill 1 1 '((1 2 3) (0 N N N)) 4) '((1 3 N) (0 N N N)))
-;(check-expect (fill 1 2 '((1 2 3) (0 N N N)) 4) '((1 3 0) (0 N N N)))
 
 ;; fill: Nat Nat Attempt Nat -> Guess
 ;; Requires: nr + nw <= (length (first attempt))
@@ -674,11 +628,6 @@
 ;; ---------------
 ;; (fill-r nr guess) changes the positions in the first of guess to
 ;;    an initial nr red marks and no white marks.
-;; Examples:
-;(check-expect (fill-r 0 '((1 2 3) (0 N N N))) '((N N N) (0 N N N)))
-;(check-expect (fill-r 1 '((1 2 3) (0 N N N))) '((1 N N) (0 N N N)))
-;(check-expect (fill-r 2 '((1 2 3) (0 N N N))) '((1 2 N) (0 N N N)))
-;(check-expect (fill-r 3 '((1 2 3) (0 N N N))) '((1 2 3) (0 N N N)))
 
 ;; fill-r: Nat Guess -> Guess
 ;; Requires:
@@ -698,17 +647,6 @@
 ;; (fill-w nw guess current code-length) changes the void symbols
 ;;    in the first of guess to an initial nw white marks with respect
 ;;    to the first of current, for a code of length code-length.
-;; Examples:
-;(check-expect (fill-w 0 '((N N N) (0 N N N)) '((1 2 3) (0)) 4)
-;              '((N N N) (0 N N N)))
-;(check-expect (fill-w 2 '((N N N) (0 N N N)) '((1 2 3) (0)) 4)
-;              '((2 3 N) (0 N N N)))
-;(check-expect (fill-w 1 '((1 N N) (0 N N N)) '((1 2 3) (0)) 4)
-;              '((1 3 N) (0 N N N)))
-;(check-expect (fill-w 2 '((1 N N) (0 N N N)) '((1 2 3) (0)) 4)
-;              '((1 3 0) (0 N N N)))
-;(check-expect (fill-w 0 '((1 2 N) (0 N N N)) '((1 2 3) (0)) 4)
-;              '((1 2 N) (0 N N N)))
 
 ;; fill-w: Nat Guess Attempt Nat -> Guess
 (define (fill-w nw guess current code-length)
@@ -738,21 +676,6 @@
 ;; ---------------
 ;; (count red? guess current) produces the number of reds in guess
 ;;    with respect to current if red? is true, or of whites otherwise.
-;; Examples:
-;(check-expect (count true  '((N 1 N N)) '((0 1 2 3))) 1)
-;(check-expect (count false '((N 1 N N)) '((0 1 2 3))) 0)
-;(check-expect (count true  '((N 2 N) (N 1 N N)) '((1 2 3) (0))) 1)
-;(check-expect (count false '((N 2 N) (N 1 N N)) '((1 2 3) (0))) 1)
-;(check-expect
-; (count true
-;        '(() (1 2 0) (N N N 3) (N N N N) (N N N N) (N N N N))
-;        '(() (0 2 3) (1) () () ()))
-; 2)
-;(check-expect
-; (count false
-;        '(() (1 2 0) (N N N 3) (N N N N) (N N N N) (N N N N))
-;        '(() (0 2 3) (1) () () ()))
-; 2)
 
 ;; count: Bool Guess Attempt -> Nat
 ;; Requires: guess and current are the same length
@@ -771,11 +694,6 @@
 
 ;; ---------------
 ;; (add-mod a b n) produces the sum of a and b, modulo n.
-;; Examples:
-;(check-expect (add-mod 1 2 4) 3)
-;(check-expect (add-mod 1 2 3) 0)
-;(check-expect (add-mod 0 2 3) 2)
-;(check-expect (add-mod 2 2 3) 1)
 
 ;; add-mod: Nat Nat Nat -> Nat
 ;; Requires:
@@ -783,3 +701,178 @@
 ;;    0 <= b < n
 (define (add-mod a b n)
   (modulo (+ a b) n))
+
+
+;; ---------------
+;; (attempt->list attempt) produces the list of Colours represented
+;;    by attempt
+
+;; attempt->list: Attempt -> (listof Colour)
+(define (attempt->list attempt)
+  (define (value-label val lst)
+    (map (lambda (item) (list item val)) lst))
+  (define labelled (map value-label
+                        (reverse
+                         (build-list (length attempt) (lambda (n) n)))
+                        attempt))
+  (define merged (foldl append empty labelled))
+  (define sorted (sort merged (lambda (item1 item2)
+                                (< (first item1) (first item2)))))
+  (define vals (map second sorted))
+
+  vals)
+
+
+;; -------------------------------------------------------------------
+;; Tests
+
+;; generate
+(check-expect (generate '((0)) '(((0))) '(0) '(0) 1) '((N)))
+(check-expect (generate '((0) (N)) '(((0) ()) ((0))) '(0 0) '(0 0) 1)
+              '((N) (N)))
+(check-expect (generate '((0 1 2)) '(((0 1 2))) '(2) '(0) 3)
+              '((0 1 N)))
+(check-expect
+ (generate '((1 2) (0 N N)) '(((1 2) (0)) ((0 1 2))) '(1 1) '(1 0) 3)
+ '((N 2) (N 1 N)))
+(check-expect
+ (generate '((1 2) (0 N N)) '(((1 2) (0)) ((0 1 2))) '(0 1) '(1 0) 3)
+ '((N N) (N 1 N)))
+
+;; complete
+(check-expect (complete '((0 N N N)) 4) '((1 2 3) (0 N N N)))
+(check-expect (complete '((N 2 N) (N 1 N N)) 4)
+              '((0 3) (N 2 N) (N 1 N N)))
+
+;; rectify
+(check-expect (rectify '((N)) '(((0))) '(0) '(0) 1) '((N)))
+(check-expect (rectify '((N) (N)) '(((0) ()) ((0))) '(0 0) '(0 0) 1)
+              '((N) (N)))
+(check-expect (rectify '((0 1 N)) '(((0 1 2))) '(2) '(0) 3)
+              '((0 1 N)))
+(check-expect
+ (rectify '((2 N) (0 N N)) '(((1 2) (0)) ((0 1 2))) '(1 1) '(1 0) 3)
+ '((N 2) (N 1 N)))
+
+;; rectified?
+(check-expect (rectified? '((N 2 N) (N 1 N N)) '((1 2 3) (0)) 1 1)
+              true)
+(check-expect (rectified? '((2 N N) (0 N N N)) '((1 2 3) (0)) 1 1)
+              false)
+(check-expect (rectified? '((0 N N) (0 N N N)) '((1 2 3) (0)) 1 1)
+              false)
+
+;; cycle
+(check-expect
+ (cycle '((2 3 5 6 N) (1 N N N N N) (0 N N N N N N))
+        '(((2 3 4 5 6) (1) (0))
+          ((1 2 3 4 5 6) (0))
+          ((0 1 2 3 4 5 6)))
+        '(2 1 1) '(2 0 0) 7)
+ '((2 3 5 0 N) (1 N N N N N) (0 N N N N N N)))
+(check-expect
+ (cycle '((2 3 5 4 N) (1 N N N N N) (0 N N N N N N))
+        '(((2 3 4 5 6) (1) (0))
+          ((1 2 3 4 5 6) (0))
+          ((0 1 2 3 4 5 6)))
+        '(2 1 1) '(2 0 0) 7)
+ '((2 3 6 6 N) (1 N N N N N) (0 N N N N N N)))
+(check-expect
+ (cycle '((2 3 3 4 N) (1 N N N N N) (0 N N N N N N))
+        '(((2 3 4 5 6) (1) (0))
+          ((1 2 3 4 5 6) (0))
+          ((0 1 2 3 4 5 6)))
+        '(2 1 1) '(2 0 0) 7)
+ '((2 3 5 N 0) (1 N N N N N) (0 N N N N N N)))
+(check-expect
+ (cycle '((2 3 N 4 5) (1 N N N N N) (0 N N N N N N))
+        '(((2 3 4 5 6) (1) (0))
+          ((1 2 3 4 5 6) (0))
+          ((0 1 2 3 4 5 6)))
+        '(2 1 1) '(2 0 0) 7)
+ '((2 4 4 6 N) (1 N N N N N) (0 N N N N N N)))
+(check-expect
+ (cycle '((N 2 3 5 6) (1 N N N N N) (0 N N N N N N))
+        '(((2 3 4 5 6) (1) (0))
+          ((1 2 3 4 5 6) (0))
+          ((0 1 2 3 4 5 6)))
+        '(4 2 1) '(2 0 0) 7)
+ '((1 3 4 5 N) (N 2 N N N N) (0 N N N N N N)))
+(check-expect
+ (cycle '((5 N N 2) (N N N N 4 5))
+        '(((0 1 2 3) (4 5))
+          ((0 1 2 3 4 5)))
+        '(2 2) '(2 0) 6)
+ '((N 2 3 N) (N N N N 4 5)))
+(check-expect
+ (cycle '((N 1 2)) '(((0 1 2))) '(2) '(0) 3) 'impossible)
+
+;; simplify
+(check-expect (simplify '((2 3) (1 N N) (0 N N N))) '((2 3) (1) (0)))
+(check-expect (simplify '((0 1 2))) '((0 1 2)))
+
+;; red?
+(check-expect (red? 1 1) true)
+(check-expect (red? 0 1) false)
+(check-expect (red? 'N 1) false)
+
+;; white?
+(check-expect (white? 1 1) false)
+(check-expect (white? 0 1) true)
+(check-expect (white? 'N 1) false)
+
+;; fill
+(check-expect (fill 0 0 '((1 2 3) (0 N N N)) 4) '((N N N) (0 N N N)))
+(check-expect (fill 2 0 '((1 2 3) (0 N N N)) 4) '((1 2 N) (0 N N N)))
+(check-expect (fill 0 2 '((1 2 3) (0 N N N)) 4) '((2 3 N) (0 N N N)))
+(check-expect (fill 1 1 '((1 2 3) (0 N N N)) 4) '((1 3 N) (0 N N N)))
+(check-expect (fill 1 2 '((1 2 3) (0 N N N)) 4) '((1 3 0) (0 N N N)))
+
+;; fill-r
+(check-expect (fill-r 0 '((1 2 3) (0 N N N))) '((N N N) (0 N N N)))
+(check-expect (fill-r 1 '((1 2 3) (0 N N N))) '((1 N N) (0 N N N)))
+(check-expect (fill-r 2 '((1 2 3) (0 N N N))) '((1 2 N) (0 N N N)))
+(check-expect (fill-r 3 '((1 2 3) (0 N N N))) '((1 2 3) (0 N N N)))
+
+;; fill-w
+(check-expect (fill-w 0 '((N N N) (0 N N N)) '((1 2 3) (0)) 4)
+              '((N N N) (0 N N N)))
+(check-expect (fill-w 2 '((N N N) (0 N N N)) '((1 2 3) (0)) 4)
+              '((2 3 N) (0 N N N)))
+(check-expect (fill-w 1 '((1 N N) (0 N N N)) '((1 2 3) (0)) 4)
+              '((1 3 N) (0 N N N)))
+(check-expect (fill-w 2 '((1 N N) (0 N N N)) '((1 2 3) (0)) 4)
+              '((1 3 0) (0 N N N)))
+(check-expect (fill-w 0 '((1 2 N) (0 N N N)) '((1 2 3) (0)) 4)
+              '((1 2 N) (0 N N N)))
+
+;; count
+(check-expect (count true  '((N 1 N N)) '((0 1 2 3))) 1)
+(check-expect (count false '((N 1 N N)) '((0 1 2 3))) 0)
+(check-expect (count true  '((N 2 N) (N 1 N N)) '((1 2 3) (0))) 1)
+(check-expect (count false '((N 2 N) (N 1 N N)) '((1 2 3) (0))) 1)
+(check-expect
+ (count true
+        '(() (1 2 0) (N N N 3) (N N N N) (N N N N) (N N N N))
+        '(() (0 2 3) (1) () () ()))
+ 2)
+(check-expect
+ (count false
+        '(() (1 2 0) (N N N 3) (N N N N) (N N N N) (N N N N))
+        '(() (0 2 3) (1) () () ()))
+ 2)
+
+;; add-mod
+(check-expect (add-mod 1 2 4) 3)
+(check-expect (add-mod 1 2 3) 0)
+(check-expect (add-mod 0 2 3) 2)
+(check-expect (add-mod 2 2 3) 1)
+
+;; attempt->list
+(check-expect (attempt->list '()) '())
+(check-expect (attempt->list '((0))) '(0))
+(check-expect (attempt->list '((1 0 2))) '(0 0 0))
+(check-expect (attempt->list '((1) (2 0))) '(0 1 0))
+(check-expect (attempt->list '((3 0) (4 1) (2))) '(2 1 0 2 1))
+
+;(test)
