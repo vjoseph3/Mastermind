@@ -20,8 +20,8 @@
                   " compose a sequence of natural numbers for it"
                   " to guess.\n"
                   "...\n"
-                  "Please provide an upper bound strictly greater"
-                  " than all of the natural numbers in your code: "))
+                  "Please provide a single upper bound greater than"
+                  " or equal to each of the numbers in your code: "))
   (define pool-size-input
     (request "a natural number" (compose natural? string->number)))
   (display "Please enter the length of your code: ")
@@ -33,7 +33,7 @@
          (display "Insufficient input: game cancelled.\n")
          (restart)]
         [else
-         (define pool-size (string->number pool-size-input))
+         (define pool-size (add1 (string->number pool-size-input)))
          (define code-length (string->number code-length-input))
          (display
           (string-append
@@ -43,35 +43,15 @@
            " and correctly placed, and then how many of the remaining"
            " numbers are correctly identified but misplaced.\n"))
          (continue (mastermind-first-play code-length pool-size)
-                   (sub1 pool-size))]))
+                   code-length pool-size)]))
 
 ;; Board Nat -> Action
 ;; continue the game to its completion
-(define (continue game max-element)
+(define (continue game code-length pool-size)
   (cond [(mastermind-impossible? game)
-         (display
-          (string-append
-           "The Code-Crackin' Mind claims that your clues so far"
-           " do not accurately reflect a sequence of natural numbers"
-           " with the length and upper bound you specified earlier:"
-           " game cancelled.\n\n"
-           "Examples of correct marking:\n\n"
-           "Example 1:\n"
-           "Your code: 7 0 3 3\n"
-           "Guess:     4 7 3 7  you respond: 1 1\n"
-           "since one 3 is correct and one of the 7s is misplaced."
-           " The other 7 is incorrect (doesn't matter which).\n\n"
-           "Example 2:\n"
-           "Your code: 1 2 3\n"
-           "Guess:     1 1 1  you respond: 1 0\n"
-           "since one 1 is correct and the other two 1s are"
-           " incorrect.\n\n"
-           "Example 3:\n"
-           "Your code: 1\n"
-           "Guess:     2  you respond: 0 0\n"
-           "since the 2 is incorrect.\n\n"))
-         (restart)]
+         (handle-bad-marking)]
         [else
+         (define max-element (sub1 pool-size))
          (map (compose display
                        (string-lengthener
                         #\space
@@ -90,12 +70,40 @@
                   "The Code-Crackin' Mind doesn't understand what you"
                   " wrote: game cancelled.\n"))
                 (restart)]
-               [(and (= r (add1 max-element)) ; all correct
-                     (= w 0))
+               [(> (+ r w) code-length)
+                (handle-bad-marking)]
+               [(= r code-length) ; all correct
                 (display "Thank you for playing!\n")
                 (restart)]
                [else
-                (continue (mastermind-play game r w) max-element)])]))
+                (continue (mastermind-play game r w)
+                          code-length pool-size)])]))
+
+;; None -> Action
+;; inform the "master" player of a marking mistake, and offer
+;;    to play again
+(define (handle-bad-marking)
+  (display
+   (string-append
+    "The Code-Crackin' Mind has determined that your clues so far"
+    " do not accurately reflect a sequence of natural numbers with"
+    " the length and upper bound you specified earlier:"
+    " game cancelled.\n\n"
+    "Examples of correct marking:\n\n"
+    "Example 1:\n"
+    "Your code: 7 0 3 3\n"
+    "Guess:     4 7 3 7  you respond: 1 1\n"
+    "since one 3 is correct and one of the 7s is misplaced."
+    " The other 7 is incorrect (doesn't matter which).\n\n"
+    "Example 2:\n"
+    "Your code: 1 2 3\n"
+    "Guess:     1 1 1  you respond: 1 0\n"
+    "since one 1 is correct and the other two 1s are incorrect.\n\n"
+    "Example 3:\n"
+    "Your code: 1\n"
+    "Guess:     2  you respond: 0 0\n"
+    "since the 2 is incorrect.\n\n"))
+  (restart))
 
 ;; None -> Action
 ;; offer to start a new game
