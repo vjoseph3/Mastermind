@@ -1,0 +1,91 @@
+Introducing the Code-Crackin' Mind!
+If you have not already done so, feel free to compose a sequence of natural numbers for it to guess.
+...
+Please provide a single upper bound greater than or equal to each of the numbers in your code: (not accepted) Please enter a natural number: (not accepted) Please enter a natural number: (not accepted) Please enter a natural number: (not accepted) Please enter a natural number: Please enter the length of your code: (not accepted) Please enter a positive integer: (not accepted) Please enter a positive integer: (not accepted) Please enter a positive integer: The Code-Crackin' Mind will now guess at your code. After each guess, please enter two numbers on the same line: first, how many numbers are both correctly identified and correctly placed, and then how many of the remaining numbers are correctly identified but misplaced.
+0 : The Code-Crackin' Mind doesn't understand what you wrote: game cancelled.
+
+Would you like to play again? Y(es) / N(o): (not accepted) Please enter either Yes or Y or No or N (any case): Introducing the Code-Crackin' Mind!
+If you have not already done so, feel free to compose a sequence of natural numbers for it to guess.
+...
+Please provide a single upper bound greater than or equal to each of the numbers in your code: Please enter the length of your code: The Code-Crackin' Mind will now guess at your code. After each guess, please enter two numbers on the same line: first, how many numbers are both correctly identified and correctly placed, and then how many of the remaining numbers are correctly identified but misplaced.
+0 : The Code-Crackin' Mind doesn't understand what you wrote: game cancelled.
+
+Would you like to play again? Y(es) / N(o): Introducing the Code-Crackin' Mind!
+If you have not already done so, feel free to compose a sequence of natural numbers for it to guess.
+...
+Please provide a single upper bound greater than or equal to each of the numbers in your code: Please enter the length of your code: The Code-Crackin' Mind will now guess at your code. After each guess, please enter two numbers on the same line: first, how many numbers are both correctly identified and correctly placed, and then how many of the remaining numbers are correctly identified but misplaced.
+0 : The Code-Crackin' Mind has determined that your clues so far do not accurately reflect a sequence of natural numbers with the length and upper bound you specified earlier: game cancelled.
+
+Examples of correct marking:
+
+Example 1:
+Your code: 7 0 3 3
+Guess:     4 7 3 7  you respond: 1 1
+since one 3 is correct and one of the 7s is misplaced. The other 7 is incorrect (doesn't matter which).
+
+Example 2:
+Your code: 1 2 3
+Guess:     1 1 1  you respond: 1 0
+since one 1 is correct and the other two 1s are incorrect.
+
+Example 3:
+Your code: 1
+Guess:     2  you respond: 0 0
+since the 2 is incorrect.
+
+
+Would you like to play again? Y(es) / N(o): Introducing the Code-Crackin' Mind!
+If you have not already done so, feel free to compose a sequence of natural numbers for it to guess.
+...
+Please provide a single upper bound greater than or equal to each of the numbers in your code: Please enter the length of your code: The Code-Crackin' Mind will now guess at your code. After each guess, please enter two numbers on the same line: first, how many numbers are both correctly identified and correctly placed, and then how many of the remaining numbers are correctly identified but misplaced.
+0 : The Code-Crackin' Mind doesn't understand what you wrote: game cancelled.
+
+Would you like to play again? Y(es) / N(o): Introducing the Code-Crackin' Mind!
+If you have not already done so, feel free to compose a sequence of natural numbers for it to guess.
+...
+Please provide a single upper bound greater than or equal to each of the numbers in your code: Please enter the length of your code: The Code-Crackin' Mind will now guess at your code. After each guess, please enter two numbers on the same line: first, how many numbers are both correctly identified and correctly placed, and then how many of the remaining numbers are correctly identified but misplaced.
+0 0 0 0 : The Code-Crackin' Mind has determined that your clues so far do not accurately reflect a sequence of natural numbers with the length and upper bound you specified earlier: game cancelled.
+
+Examples of correct marking:
+
+Example 1:
+Your code: 7 0 3 3
+Guess:     4 7 3 7  you respond: 1 1
+since one 3 is correct and one of the 7s is misplaced. The other 7 is incorrect (doesn't matter which).
+
+Example 2:
+Your code: 1 2 3
+Guess:     1 1 1  you respond: 1 0
+since one 1 is correct and the other two 1s are incorrect.
+
+Example 3:
+Your code: 1
+Guess:     2  you respond: 0 0
+since the 2 is incorrect.
+
+
+Would you like to play again? Y(es) / N(o): (not accepted) Please enter either Yes or Y or No or N (any case): (not accepted) Please enter either Yes or Y or No or N (any case): Introducing the Code-Crackin' Mind!
+If you have not already done so, feel free to compose a sequence of natural numbers for it to guess.
+...
+Please provide a single upper bound greater than or equal to each of the numbers in your code: Please enter the length of your code: The Code-Crackin' Mind will now guess at your code. After each guess, please enter two numbers on the same line: first, how many numbers are both correctly identified and correctly placed, and then how many of the remaining numbers are correctly identified but misplaced.
+0 0 0 0 0 : The Code-Crackin' Mind has determined that your clues so far do not accurately reflect a sequence of natural numbers with the length and upper bound you specified earlier: game cancelled.
+
+Examples of correct marking:
+
+Example 1:
+Your code: 7 0 3 3
+Guess:     4 7 3 7  you respond: 1 1
+since one 3 is correct and one of the 7s is misplaced. The other 7 is incorrect (doesn't matter which).
+
+Example 2:
+Your code: 1 2 3
+Guess:     1 1 1  you respond: 1 0
+since one 1 is correct and the other two 1s are incorrect.
+
+Example 3:
+Your code: 1
+Guess:     2  you respond: 0 0
+since the 2 is incorrect.
+
+
+Would you like to play again? Y(es) / N(o): Session ended.
