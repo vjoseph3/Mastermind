@@ -80,7 +80,7 @@ for i in "${tests}/"*.in; do
     outcome="failed."
   fi
 
-  echo "\*\*\* Test \"${testname}\" $outcome \*\*\*"
+  echo "*** Test \"${testname}\" $outcome ***"
   if [ "$outcome" = "failed." ]; then
     echo produced output:
     cat "$out" outputend.txt
